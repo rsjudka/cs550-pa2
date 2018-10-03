@@ -13,6 +13,7 @@
 #include <fstream>
 
 
+#define ID 0 // used to identify as a super peer
 #define MAX_FILENAME_SIZE 256 // assume the maximum file size is 256 characters
 #define MAX_MSG_SIZE 4096
 
@@ -47,130 +48,130 @@ class SuperPeer {
             exit(1);
         }
 
-        //helper function for cleaning up the indexing server anytime a peer client is disconnected
-        void remove_client(int client_socket_fd, int client_id, std::string type) {
-            std::string msg = "closing connection for client ID '" + std::to_string(client_id) + "' and cleaning up index";
+        //helper function for cleaning up the indexing server anytime a peer leaf_node is disconnected
+        void remove_leaf_node(int leaf_node_socket_fd, int leaf_node_id, std::string type) {
+            std::string msg = "closing connection for leaf_node ID '" + std::to_string(leaf_node_id) + "' and cleaning up index";
             log(type, msg);
-            files_index_cleanup(client_id);
-            close(client_socket_fd);
+            files_index_cleanup(leaf_node_id);
+            close(leaf_node_socket_fd);
         }
 
         // handle all requests sent to the indexing server
-        void handle_requests(int client_socket_fd) {
-            int client_id;
-            //initialize connection with peer client with getting client id
-            if (recv(client_socket_fd, &client_id, sizeof(client_id), 0) < 0) {
-                log("client unidentified", "closing connection");
-                close(client_socket_fd);
+        void handle_request(int leaf_node_socket_fd) {
+            int leaf_node_id;
+            //initialize connection with peer leaf_node with getting leaf_node id
+            if (recv(leaf_node_socket_fd, &leaf_node_id, sizeof(leaf_node_id), 0) < 0) {
+                log("leaf_node unidentified", "closing connection");
+                close(leaf_node_socket_fd);
                 return;
             }
 
             char request;
             while (1) {
                 request = '0';
-                // get request type from peer client
-                if (recv(client_socket_fd, &request, sizeof(request), 0) < 0) {
-                    remove_client(client_socket_fd, client_id, "client unresponsive");
+                // get request type from peer leaf_node
+                if (recv(leaf_node_socket_fd, &request, sizeof(request), 0) < 0) {
+                    remove_leaf_node(leaf_node_socket_fd, leaf_node_id, "leaf_node unresponsive");
                     return;
                 }
 
                 switch (request) {
                     case '1':
-                        registry(client_socket_fd, client_id);
+                        registry(leaf_node_socket_fd, leaf_node_id);
                         break;
                     case '2':
-                        deregistry(client_socket_fd, client_id);
+                        deregistry(leaf_node_socket_fd, leaf_node_id);
                         break;
                     case '3':
-                        search(client_socket_fd, client_id);
+                        search(leaf_node_socket_fd, leaf_node_id);
                         break;
                     case '4':
                         print_files_map();
                         break;
                     case '0':
-                        remove_client(client_socket_fd, client_id, "client disconnected");
+                        remove_leaf_node(leaf_node_socket_fd, leaf_node_id, "leaf_node disconnected");
                         return;
                     default:
-                        remove_client(client_socket_fd, client_id, "unexpected request");
+                        remove_leaf_node(leaf_node_socket_fd, leaf_node_id, "unexpected request");
                         return;
                 }
             }
         }
 
-        // handles communication with peer client for registering a single file 
-        void registry(int client_socket_fd, int client_id) {
+        // handles communication with peer leaf_node for registering a single file 
+        void registry(int leaf_node_socket_fd, int leaf_node_id) {
             char buffer[MAX_FILENAME_SIZE];
-            // recieve filename from peer client
-            if (recv(client_socket_fd, buffer, sizeof(buffer), 0) < 0) {
-                remove_client(client_socket_fd, client_id, "client unresponsive");
+            // recieve filename from peer leaf_node
+            if (recv(leaf_node_socket_fd, buffer, sizeof(buffer), 0) < 0) {
+                remove_leaf_node(leaf_node_socket_fd, leaf_node_id, "leaf_node unresponsive");
                 return;
             }
             
             std::string filename = std::string(buffer);
             std::lock_guard<std::mutex> guard(files_index_m);
-            // add peer's client id to file map if not already included
-            if(!(std::find(files_index[filename].begin(), files_index[filename].end(), client_id) != files_index[filename].end()))
-                files_index[filename].push_back(client_id);
+            // add peer's leaf_node id to file map if not already included
+            if(!(std::find(files_index[filename].begin(), files_index[filename].end(), leaf_node_id) != files_index[filename].end()))
+                files_index[filename].push_back(leaf_node_id);
         }
 
-        // handles communication with peer client for deregistering a single file 
-        void deregistry(int client_socket_fd, int client_id) {
+        // handles communication with peer leaf_node for deregistering a single file 
+        void deregistry(int leaf_node_socket_fd, int leaf_node_id) {
             char buffer[MAX_FILENAME_SIZE];
-            if (recv(client_socket_fd, buffer, sizeof(buffer), 0) < 0) {
-                remove_client(client_socket_fd, client_id, "client unresponsive");
+            if (recv(leaf_node_socket_fd, buffer, sizeof(buffer), 0) < 0) {
+                remove_leaf_node(leaf_node_socket_fd, leaf_node_id, "leaf_node unresponsive");
                 return;
             }
  
             std::string filename = std::string(buffer);
             std::lock_guard<std::mutex> guard(files_index_m);
-            // remove peer's client id from file
-            files_index[filename].erase(std::remove(files_index[filename].begin(), files_index[filename].end(), client_id), files_index[filename].end());
+            // remove peer's leaf_node id from file
+            files_index[filename].erase(std::remove(files_index[filename].begin(), files_index[filename].end(), leaf_node_id), files_index[filename].end());
             // remove filename from mapping if no more peers mapped to file
             if (files_index[filename].size() == 0)
                 files_index.erase(filename);
         }
 
-        // remove client id from all files in mapping
-        void files_index_cleanup(int client_id) {
+        // remove leaf_node id from all files in mapping
+        void files_index_cleanup(int leaf_node_id) {
             std::unordered_map<std::string, std::vector<int>> tmp_files_index;
             
             std::lock_guard<std::mutex> guard(files_index_m);
             for (auto const &file_index : files_index) {
-                std::vector<int> tmp_client_ids = file_index.second;
-                tmp_client_ids.erase(std::remove(tmp_client_ids.begin(), tmp_client_ids.end(), client_id), tmp_client_ids.end());
-                if (tmp_client_ids.size() > 0)
-                    tmp_files_index[file_index.first] = tmp_client_ids;
+                std::vector<int> tmp_leaf_node_ids = file_index.second;
+                tmp_leaf_node_ids.erase(std::remove(tmp_leaf_node_ids.begin(), tmp_leaf_node_ids.end(), leaf_node_id), tmp_leaf_node_ids.end());
+                if (tmp_leaf_node_ids.size() > 0)
+                    tmp_files_index[file_index.first] = tmp_leaf_node_ids;
             }
             files_index = tmp_files_index;
         }
 
-        // handles communication with peer client for returning all client ids mapped to a filename
-        void search(int client_socket_fd, int client_id) {
+        // handles communication with peer leaf_node for returning all leaf_node ids mapped to a filename
+        void search(int leaf_node_socket_fd, int leaf_node_id) {
             char buffer[MAX_FILENAME_SIZE];
-            // recieve filename from peer client
-            if (recv(client_socket_fd, buffer, sizeof(buffer), 0) < 0) {
-                remove_client(client_socket_fd, client_id, "client unresponsive");
+            // recieve filename from peer leaf_node
+            if (recv(leaf_node_socket_fd, buffer, sizeof(buffer), 0) < 0) {
+                remove_leaf_node(leaf_node_socket_fd, leaf_node_id, "leaf_node unresponsive");
                 return;
             }
 
             std::string filename = std::string(buffer);
             
-            std::ostringstream client_ids;
+            std::ostringstream leaf_node_ids;
             if (files_index.count(filename) > 0) {
                 std::string delimiter;
                 std::lock_guard<std::mutex> guard(files_index_m);
-                for (auto &&client_id : files_index[filename]) {
-                    // add client id to stream
-                    client_ids << delimiter << client_id;
+                for (auto &&leaf_node_id : files_index[filename]) {
+                    // add leaf_node id to stream
+                    leaf_node_ids << delimiter << leaf_node_id;
                     delimiter = ',';
                 }
             }
 
             char buffer_[MAX_MSG_SIZE];
-            strcpy(buffer_, client_ids.str().c_str());
-            // send comma delimited list of all client ids for a specific file to the peer client
-            if (send(client_socket_fd, buffer_, sizeof(buffer_), 0) < 0) {
-                remove_client(client_socket_fd, client_id, "client unresponsive");
+            strcpy(buffer_, leaf_node_ids.str().c_str());
+            // send comma delimited list of all leaf_node ids for a specific file to the peer leaf_node
+            if (send(leaf_node_socket_fd, buffer_, sizeof(buffer_), 0) < 0) {
+                remove_leaf_node(leaf_node_socket_fd, leaf_node_id, "leaf_node unresponsive");
                 return;
             }
         }
@@ -182,8 +183,8 @@ class SuperPeer {
             for (auto const &file_index : files_index) {
                 std::cout << file_index.first << ':';
                 std::string delimiter;
-                for (auto &&client_id : file_index.second) {
-                    std::cout << delimiter << client_id;
+                for (auto &&leaf_node_id : file_index.second) {
+                    std::cout << delimiter << leaf_node_id;
                     delimiter = ',';
                 }
                 std::cout << std::endl;
@@ -268,16 +269,16 @@ class SuperPeer {
                 listen(socket_fd, 5);
 
                 if ((conn_socket_fd = accept(socket_fd, (struct sockaddr*)&addr, &addr_size)) < 0) {
-                    // ignore any failed connections from peer clients
+                    // ignore any failed connections from peer leaf_nodes
                     log("failed connection", "ignoring connection");
                     continue;
                 }
 
                 conn_identity << inet_ntoa(addr.sin_addr) << '@' << ntohs(addr.sin_port);
-                log("client connected", conn_identity.str());
+                log("conn established", conn_identity.str());
                 
                 // start thread for single client-server communication
-                std::thread t(&SuperPeer::handle_requests, this, conn_socket_fd);
+                std::thread t(&SuperPeer::handle_request, this, conn_socket_fd);
                 t.detach(); // detaches thread and allows for next connection to be made without waiting
 
                 conn_identity.str("");
