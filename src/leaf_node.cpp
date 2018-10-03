@@ -18,7 +18,6 @@
 
 
 #define HOST "localhost" // assume all connections happen on same machine
-#define INDEXING_SERVER_PORT 9999 // default chosen from indexing_server source code
 #define MAX_FILENAME_SIZE 256 // assume the maximum file size is 256 characters
 #define MAX_MSG_SIZE 4096
 #define MAX_STAT_MSG_SIZE 16
@@ -31,7 +30,7 @@ int retrieve_request_counter = 0;
 
 class LeafNode {
     private:
-        std::vector<std::pair<std::string, time_t>> files; // vector of all files within a peer's directory
+        std::vector<std::pair<std::string, time_t>> files; // vector of all files within a node's directory
         std::ofstream server_log;
         std::ofstream client_log;
 
@@ -61,7 +60,7 @@ class LeafNode {
             exit(1);
         }
 
-        // handles a peer server's file retrieval request
+        // handles a node server's file retrieval request
         // only performs single retrieval
         void handle_client_request(int client_socket_fd) {
             retrieve(client_socket_fd);
@@ -71,28 +70,28 @@ class LeafNode {
         }
 
         void retrieve(int client_socket_fd) {
-            // recieve filename to download from peer client
+            // recieve filename to download from node client
             char buffer[MAX_FILENAME_SIZE];
             if (recv(client_socket_fd, buffer, MAX_FILENAME_SIZE, 0) < 0) {
                 log(server_log, "client unresponsive", "closing connection");
                 return;
             }
             
-            // create full file path of peer server to send
+            // create full file path of node server to send
             std::ostringstream filename;
             filename << std::string(files_directory_path);
             filename << std::string(buffer);
 
             int fd = open(filename.str().c_str(), O_RDONLY);
             if (fd == -1) {
-                // send message to peer client if file cannot be opened
+                // send message to node client if file cannot be opened
                 if (send(client_socket_fd, "-1", MAX_STAT_MSG_SIZE, 0) < 0)
                     log(server_log, "client unresponsive", "closing connection");
             }
             else {
                 struct stat file_stat;
                 if (fstat(fd, &file_stat) < 0) {
-                    // send message to peer client if file size cannot be determined
+                    // send message to node client if file size cannot be determined
                     if (send(client_socket_fd, "-2", MAX_STAT_MSG_SIZE, 0) < 0)
                         log(server_log, "client unresponsive", "closing connection");
                 }
@@ -100,7 +99,7 @@ class LeafNode {
                     char file_size[MAX_STAT_MSG_SIZE];
                     sprintf(file_size, "%ld", file_stat.st_size);
 
-                    //send file size to peer client
+                    //send file size to node client
                     if (send(client_socket_fd, file_size, sizeof(file_size), 0) < 0) {
                         log(server_log, "client unresponsive", "closing connection");
                         return;
@@ -117,7 +116,7 @@ class LeafNode {
             close(fd);
         }
 
-        // read all files in peer's directory and save to files vector
+        // read all files in node's directory and save to files vector
         std::vector<std::pair<std::string, time_t>> get_files() {
             std::vector<std::pair<std::string, time_t>> tmp_files;
             
@@ -162,8 +161,8 @@ class LeafNode {
         }
 
         // create a connection to some server given a specific port
-        // index_server flag used for knowing which type of server to connect
-        int connect_server(int server_port, bool index_server=true) {
+        // super_peer flag used for knowing which type of server to connect
+        int connect_server(int server_port, bool super_peer=true) {
             struct sockaddr_in addr;
             socklen_t addr_size = sizeof(addr);
             bzero((char *)&addr, addr_size);
@@ -178,9 +177,9 @@ class LeafNode {
             
             // connect to the server
             if (connect(server_socket_fd, (struct sockaddr *)&addr, addr_size) < 0) {
-                // only exit program if failed to connect to indexing server
-                if (index_server)
-                    error("failed indexing server connection");
+                // only exit program if failed to connect to super peer
+                if (super_peer)
+                    error("failed super peer connection");
                 else {
                     return -1;
                 }
@@ -208,7 +207,7 @@ class LeafNode {
                     else {
                         bzero(buffer, MAX_FILENAME_SIZE);
                         strcpy(buffer, x.first.c_str());
-                        // register file with the indexing server
+                        // register file with the super peer
                         if (send(server_socket_fd, buffer, sizeof(buffer), 0) < 0)
                             log(client_log, "server unresponsive", "ignoring request");
                     }
@@ -220,26 +219,26 @@ class LeafNode {
             }
         }
         
-        // handle user interface for sending a search request to the indexing server
+        // handle user interface for sending a search request to the super peer
         void search_request(int server_socket_fd) {
             std::cout << "filename: ";
             char filename[MAX_FILENAME_SIZE];
             std::cin >> filename;
             eval_log(client_log, search_request_counter, "search request", "start");
-            // send a search request to the indexing server
+            // send a search request to the super peer
             if (send(server_socket_fd, "3", sizeof(char), 0) < 0) {
                 std::cout << "\nunexpected connection issue: no search performed\n" << std::endl;
                 log(client_log, "server unresponsive", "ignoring request");
             }
             else {
-                // send the filename to search to the indexing server
+                // send the filename to search to the super peer
                 if (send(server_socket_fd, filename, sizeof(filename), 0) < 0) {
                     std::cout << "\nunexpected connection issue: no search performed\n" << std::endl;
                     log(client_log, "server unresponsive", "ignoring request");
                 }
                 else {
-                    // recieve list of peers with file from indexing server
-                    // output appropriate message to peer client
+                    // recieve list of nodes with file from super peer
+                    // output appropriate message to node client
                     char buffer[MAX_MSG_SIZE];
                     if (recv(server_socket_fd, buffer, sizeof(buffer), 0) < 0) {
                         std::cout << "\nunexpected connection issue: no search performed\n" << std::endl;
@@ -248,42 +247,42 @@ class LeafNode {
                     else if (!buffer[0])
                         std::cout << "\nfile \"" << filename << "\" not found\n" << std::endl;
                     else
-                        std::cout << "\npeer(s) with file \"" << filename << "\": " << buffer << '\n' << std::endl;
+                        std::cout << "\nnode(s) with file \"" << filename << "\": " << buffer << '\n' << std::endl;
                 }
             }
             eval_log(client_log, search_request_counter++, "search request", "end");
         }
 
         //helper function for creating the filename of a downloaded file
-        std::string resolve_filename(std::string filename, std::string(peer)) {
+        std::string resolve_filename(std::string filename, std::string(node)) {
             std::ostringstream local_filename;
             local_filename << files_directory_path;
             size_t extension_idx = filename.find_last_of('.');
             local_filename << filename.substr(0, extension_idx);
             // add the file origin if the file already exists in the local directory
             if ((std::find_if(files.begin(), files.end(), [filename](const std::pair<std::string, int> &element){return element.first == filename;}) != files.end()))
-                local_filename << "-origin-" << peer;
+                local_filename << "-origin-" << node;
             local_filename << filename.substr(extension_idx, filename.size() - extension_idx);
 
             return local_filename.str();
         }
         
-        // handle user interface for sending a retrieve request to a peer server
+        // handle user interface for sending a retrieve request to a node server
         void retrieve_request(int server_socket_fd) {
-            std::cout << "peer: ";
-            char peer[6];
-            std::cin >> peer;
+            std::cout << "node: ";
+            char node[6];
+            std::cin >> node;
             eval_log(client_log, retrieve_request_counter, "retrieve request", "start");
-            // check if the passed-in peer is the current client
-            if (atoi(peer) == port) {
-                std::cout << "\npeer '" << peer << "' is current client: no retreival performed\n" << std::endl;
+            // check if the passed-in node is the current client
+            if (atoi(node) == node_port) {
+                std::cout << "\nnode '" << node << "' is current client: no retreival performed\n" << std::endl;
                 return;
             }
-            // connect to the given peer server
-            int peer_socket_fd = connect_server(atoi(peer), false);
-            if (peer_socket_fd < 0) {
-                std::cout << "\npeer '" << peer << "' is not valid: no retreival performed\n" << std::endl;
-                log(client_log, "failed peer server connection", "ignoring request");
+            // connect to the given node server
+            int node_socket_fd = connect_server(atoi(node), false);
+            if (node_socket_fd < 0) {
+                std::cout << "\nnode '" << node << "' is not valid: no retreival performed\n" << std::endl;
+                log(client_log, "failed node server connection", "ignoring request");
                 return;
             }
             
@@ -292,27 +291,27 @@ class LeafNode {
             char filename[MAX_FILENAME_SIZE];
             std::cin >> filename;
             eval_log(client_log, retrieve_request_counter, "retrieve request", "unpause");
-            if (send(peer_socket_fd, filename, sizeof(filename), 0) < 0) {
+            if (send(node_socket_fd, filename, sizeof(filename), 0) < 0) {
                 std::cout << "\nunexpected connection issue: no retreival performed\n" << std::endl;
-                log(client_log, "peer unresponsive", "ignoring request");
+                log(client_log, "node unresponsive", "ignoring request");
             }
             else {
                 char buffer[MAX_STAT_MSG_SIZE];
-                // get the file size from the peer server
-                if (recv(peer_socket_fd, buffer, sizeof(buffer), 0) < 0) {
+                // get the file size from the node server
+                if (recv(node_socket_fd, buffer, sizeof(buffer), 0) < 0) {
                     std::cout << "\nunexpected connection issue: no retreival performed\n" << std::endl;
-                    log(client_log, "peer unresponsive", "ignoring request");
+                    log(client_log, "node unresponsive", "ignoring request");
                 }
                 else {
                     int file_size = atoi(buffer);
-                    // handle message from peer server
+                    // handle message from node server
                     if (file_size == -1)
-                        std::cout << "\npeer '" << peer << "' does not have file \"" << filename << "\": no retreival performed\n" << std::endl;
+                        std::cout << "\nnode '" << node << "' does not have file \"" << filename << "\": no retreival performed\n" << std::endl;
                     else if (file_size == -2)
                         std::cout << "\ncould not read file \"" << filename << "\"'s stats: no retreival performed\n" << std::endl;
                     else {
-                        // create pretty filename for outputting results to peer client
-                        std::string local_filename_path = resolve_filename(filename, peer);
+                        // create pretty filename for outputting results to node client
+                        std::string local_filename_path = resolve_filename(filename, node);
                         size_t filename_idx = local_filename_path.find_last_of('/');
                         std::string local_filename = local_filename_path.substr(filename_idx+1, local_filename_path.size() - filename_idx);
                         FILE *file = fopen(local_filename_path.c_str(), "w");
@@ -324,8 +323,8 @@ class LeafNode {
                             char buffer_[MAX_MSG_SIZE];
                             int remaining_size = file_size;
                             int received_size;
-                            // write blocks recieved from peer server to new file
-                            while (((received_size = recv(peer_socket_fd, buffer_, sizeof(buffer_), 0)) > 0) && (remaining_size > 0)) {
+                            // write blocks recieved from node server to new file
+                            while (((received_size = recv(node_socket_fd, buffer_, sizeof(buffer_), 0)) > 0) && (remaining_size > 0)) {
                                 fwrite(buffer_, sizeof(char), received_size, file);
                                 remaining_size -= received_size;
                             }
@@ -338,16 +337,44 @@ class LeafNode {
                 }
             }
             eval_log(client_log, retrieve_request_counter++, "retrieve request", "end");
-            close(peer_socket_fd);
+            close(node_socket_fd);
+        }
+
+        void get_network(std::string config_path) {
+            std::ifstream config(config_path);
+            int member_type;
+            int id;
+            int port;
+            int pexer;
+
+            std::string tmp;
+            while(config >> member_type) {
+                if (member_type == 1) {
+                    config >> id >> port >> pexer;
+                    if (id == node_id) {
+                        node_port = port;
+                        pexer_port = pexer;
+                        return;
+                    }
+                }
+                else
+                    std::getline(config, tmp); // ignore anything else in the line
+            }
+            error("invalid node id");
         }
 
     public:
         std::string files_directory_path;
-        int port;
+        int node_id;
+        int node_port;
+        int pexer_port;
         int socket_fd;
 
-        LeafNode(std::string path, int custom_port) {
-            files_directory_path = path;
+        LeafNode(int id, std::string config_path, std::string directory_path) {
+            node_id = id;
+            get_network(config_path);
+            
+            files_directory_path = directory_path;
             // add ending '/' if missing in path argument
             if (files_directory_path.back() != '/')
                 files_directory_path += '/';
@@ -359,34 +386,27 @@ class LeafNode {
             
             addr.sin_family = AF_INET;
             addr.sin_addr.s_addr = INADDR_ANY;
-            // if passing custom port as arg, use that instead of a random one (used for running analysis)
-            if (custom_port > 0) {
-                addr.sin_port = htons(custom_port);
-            }
+            addr.sin_port = htons(node_port);
 
             socket_fd = socket(AF_INET, SOCK_STREAM, 0);
 
-            // bind socket to port to be used for peer server
+            // bind socket to port to be used for node server
             if (bind(socket_fd, (struct sockaddr*)&addr, addr_size) < 0)
-                error("failed to start peer server");
-            
-            // get port number to use as client id for indexing server
-            getsockname(socket_fd, (struct sockaddr *)&addr, &addr_size);
-            port = ntohs(addr.sin_port);
+                error("failed to start node server");
 
-            std::cout << "current client id: " << port << '\n' << std::endl;
+            std::cout << "current client id: " << node_port << '\n' << std::endl;
 
-            // start logging for both peer client and peer server
-            std::string log_name_prefix = "logs/peers/" + std::to_string(port);
+            // start logging for both node client and node server
+            std::string log_name_prefix = "logs/nodes/" + std::to_string(node_port);
             server_log.open(log_name_prefix + "_server.log");
             client_log.open(log_name_prefix + "_client.log");
         }
         
         void run_client() {
-            int server_socket_fd = connect_server(INDEXING_SERVER_PORT);
+            int server_socket_fd = connect_server(pexer_port);
 
-            //send peer server port number to be used as client id in indexing server
-            if (send(server_socket_fd, &port, sizeof(port), 0) < 0)
+            //send node server port number to be used as client id in super peer
+            if (send(server_socket_fd, &node_port, sizeof(node_port), 0) < 0)
                 error("server unreachable");
 
             //start thread for automatic files updater
@@ -432,11 +452,11 @@ class LeafNode {
 
             std::ostringstream client_identity;
             while (1) {
-                // listen for any peer connections to start file download
+                // listen for any node connections to start file download
                 listen(socket_fd, 5);
 
                 if ((client_socket_fd = accept(socket_fd, (struct sockaddr*)&addr, &addr_size)) < 0) {
-                    // ignore any failed connections from peer clients
+                    // ignore any failed connections from node clients
                     log(server_log, "failed client connection", "ignoring connection");
                     continue;
                 }
@@ -471,18 +491,13 @@ class LeafNode {
 
 
 int main(int argc, char *argv[]) {
-    // require directory path to be passed as arg
-    if (argc < 2) {
-        std::cerr << "usage: " << argv[0] << " path" << std::endl;
+    // require node id, config path, & directory path to be passed as arg
+    if (argc < 4) {
+        std::cerr << "usage: " << argv[0] << " node_id config_path directory_path" << std::endl;
         exit(0);
     }
-    
-    int port = 0;
-    if (argc == 3) {
-        port = atoi(argv[2]);
-    }
 
-    LeafNode leaf_node(argv[1], port);
+    LeafNode leaf_node(atoi(argv[1]), argv[2], argv[3]);
     leaf_node.run();
 
     return 0;

@@ -13,6 +13,7 @@ logging:
 
 env_dirs:
 	mkdir nodes/
+	mkdir nodes/n0/
 	mkdir nodes/n1/
 	mkdir nodes/n2/
 	mkdir nodes/n3/
@@ -22,9 +23,9 @@ env_dirs:
 	mkdir nodes/n7/
 	mkdir nodes/n8/
 	mkdir nodes/n9/
-	mkdir nodes/n10/
 
 test_data:
+	cp ../data/n0/* nodes/n0/
 	cp ../data/n1/* nodes/n1/
 	cp ../data/n2/* nodes/n2/
 	cp ../data/n3/* nodes/n3/
@@ -34,7 +35,6 @@ test_data:
 	cp ../data/n7/* nodes/n7/
 	cp ../data/n8/* nodes/n8/
 	cp ../data/n9/* nodes/n9/
-	cp ../data/n10/* nodes/n10/
 
 clean:
 	rm super_peer leaf_node
