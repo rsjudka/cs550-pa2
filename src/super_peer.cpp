@@ -13,13 +13,15 @@
 #include <fstream>
 
 
-#define PORT 9999 // default chosen for server
 #define MAX_FILENAME_SIZE 256 // assume the maximum file size is 256 characters
 #define MAX_MSG_SIZE 4096
 
 
 class SuperPeer {
     private:
+        std::vector<int> neighbors;
+        std::vector<int> leaf_nodes;
+        
         std::unordered_map<std::string, std::vector<int>> files_index; // mapping between a filename and any peers associated with it
         std::ofstream server_log;
 
@@ -54,7 +56,7 @@ class SuperPeer {
         }
 
         // handle all requests sent to the indexing server
-        void handle_client_requests(int client_socket_fd) {
+        void handle_requests(int client_socket_fd) {
             int client_id;
             //initialize connection with peer client with getting client id
             if (recv(client_socket_fd, &client_id, sizeof(client_id), 0) < 0) {
@@ -189,17 +191,47 @@ class SuperPeer {
             std::cout << "_______________________________\n" << std::endl;
         }
 
+        void get_network(std::string config_path) {
+            std::ifstream config(config_path);
+            int member_type;
+            int id;
+            int port;
+            std::string neighbors_string;
+            std::string leaf_nodes_string;
+
+            std::string tmp;
+            while(config >> member_type) {
+                if (member_type == 0) {
+                    config >> id >> port >> neighbors_string >> leaf_nodes_string;
+                    if (id == peer_id) {
+                        peer_port = port;
+                        neighbors = comma_delim_ints_to_vector(neighbors_string);
+                        leaf_nodes = comma_delim_ints_to_vector(leaf_nodes_string);
+                        return;
+                    }
+                }
+                else
+                    std::getline(config, tmp); // ignore anything else in the line
+            }
+            error("invalid peer id");
+        }
+
     public:
+        int peer_id;
+        int peer_port;
         int socket_fd;
 
-        SuperPeer() {
+        SuperPeer(int id, std::string config_path) {
+            peer_id = id;
+            get_network(config_path);
+
             struct sockaddr_in addr;
             socklen_t addr_size = sizeof(addr);
             bzero((char*)&addr, addr_size);
             
             addr.sin_family = AF_INET;
             addr.sin_addr.s_addr = INADDR_ANY;
-            addr.sin_port = htons(PORT);
+            addr.sin_port = htons(peer_port);
 
             socket_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -207,37 +239,49 @@ class SuperPeer {
             if (bind(socket_fd, (struct sockaddr*)&addr, addr_size) < 0)
                 error("failed server binding");
 
-            std::cout << "starting indexing server on port " << PORT << '\n' << std::endl;
+            std::cout << "starting indexing server on port " << peer_port << '\n' << std::endl;
 
             // start logging
             server_log.open("logs/indexing_server/server.log");
         }
 
+        std::vector<int> comma_delim_ints_to_vector(std::string s) {
+            std::vector<int> result;
+
+            std::stringstream ss(s);
+            while(ss.good()) {
+                std::string substr;
+                std::getline(ss, substr, ',');
+                result.push_back(atoi(substr.c_str()));
+            }
+            return result;
+        }
+
         void run() {
             struct sockaddr_in addr;
             socklen_t addr_size = sizeof(addr);
-            int client_socket_fd;
+            int conn_socket_fd;
 
-            std::ostringstream client_identity;
+            std::ostringstream conn_identity;
             while (1) {
                 // listen for any peer connections to start communication
                 listen(socket_fd, 5);
 
-                if ((client_socket_fd = accept(socket_fd, (struct sockaddr*)&addr, &addr_size)) < 0) {
+                if ((conn_socket_fd = accept(socket_fd, (struct sockaddr*)&addr, &addr_size)) < 0) {
                     // ignore any failed connections from peer clients
-                    log("failed client connection", "ignoring connection");
+                    log("failed connection", "ignoring connection");
                     continue;
                 }
 
-                client_identity << inet_ntoa(addr.sin_addr) << '@' << ntohs(addr.sin_port);
-                log("client connected", client_identity.str());
+                conn_identity << inet_ntoa(addr.sin_addr) << '@' << ntohs(addr.sin_port);
+                log("client connected", conn_identity.str());
                 
                 // start thread for single client-server communication
-                std::thread t(&SuperPeer::handle_client_requests, this, client_socket_fd);
+                std::thread t(&SuperPeer::handle_requests, this, conn_socket_fd);
                 t.detach(); // detaches thread and allows for next connection to be made without waiting
 
-                client_identity.str("");
-                client_identity.clear();
+                conn_identity.str("");
+                conn_identity.clear();
             }
         }
 
@@ -248,8 +292,14 @@ class SuperPeer {
 };
 
 
-int main() {
-    SuperPeer super_peer;
+int main(int argc, char *argv[]) {
+    // require peer id config path to be passed as arg
+    if (argc < 3) {
+        std::cerr << "usage: " << argv[0] << " peer_id config_path" << std::endl;
+        exit(0);
+    }
+
+    SuperPeer super_peer(atoi(argv[1]), argv[2]);
     super_peer.run();
 
     return 0;

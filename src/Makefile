@@ -37,6 +37,6 @@ test_data:
 	cp ../data/n10/* nodes/n10/
 
 clean:
-	rm indexing_server peer
+	rm super_peer leaf_node
 	rm -rf nodes/
 	rm -rf logs/
