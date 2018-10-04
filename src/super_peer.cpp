@@ -1,6 +1,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 
 #include <thread>
 #include <mutex>
@@ -13,7 +14,7 @@
 #include <fstream>
 
 
-#define ID 0 // used to identify as a super peer
+#define HOST "localhost" // assume all connections happen on same machine
 #define MAX_FILENAME_SIZE 256 // assume the maximum file size is 256 characters
 #define MAX_MSG_SIZE 4096
 
@@ -50,14 +51,83 @@ class SuperPeer {
 
         //helper function for cleaning up the indexing server anytime a peer leaf_node is disconnected
         void remove_leaf_node(int leaf_node_socket_fd, int leaf_node_id, std::string type) {
-            std::string msg = "closing connection for leaf_node ID '" + std::to_string(leaf_node_id) + "' and cleaning up index";
+            std::string msg = "closing connection for leaf_node id '" + std::to_string(leaf_node_id) + "' and cleaning up index";
             log(type, msg);
             files_index_cleanup(leaf_node_id);
             close(leaf_node_socket_fd);
         }
 
+        // create a connection to some server given a specific port
+        int connect_server(int server_port) {
+            struct sockaddr_in addr;
+            socklen_t addr_size = sizeof(addr);
+            bzero((char *)&addr, addr_size);
+
+            // open a socket for the new connection
+            struct hostent *server = gethostbyname(HOST);
+            int server_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+            addr.sin_family = AF_INET;
+            bcopy((char *)server->h_addr, (char *)&addr.sin_addr.s_addr, server->h_length);
+            addr.sin_port = htons(server_port);
+            
+            // connect to the server
+            if (connect(server_socket_fd, (struct sockaddr *)&addr, addr_size) < 0) {
+                return -1;
+            }
+            
+            return server_socket_fd;
+        }
+
         // handle all requests sent to the indexing server
-        void handle_request(int leaf_node_socket_fd) {
+        void handle_connection(int conn_socket_fd) {
+            int id;
+            //initialize connection with conn by getting conn id
+            if (recv(conn_socket_fd, &id, sizeof(id), 0) < 0) {
+                log("conn unidentified", "closing connection");
+                close(conn_socket_fd);
+                return;
+            }
+
+            switch (id) {
+                case 0:
+                    handle_super_peer_request(conn_socket_fd);
+                    break;
+                case 1:
+                    handle_leaf_node_requests(conn_socket_fd);
+                    break;
+                default:
+                    log("conn unidentified", "closing connection");
+                    close(conn_socket_fd);
+                    return;
+            }
+        }
+
+        void handle_super_peer_request(int super_peer_socket_fd) {
+            char request;
+            // get request type from peer leaf_node
+            if (recv(super_peer_socket_fd, &request, sizeof(request), 0) < 0) {
+                log("super_peer unidentified", "closing connection");
+                close(super_peer_socket_fd);
+                return;
+            }
+
+            switch (request) {
+                case '1':
+                    std::cout << "got request from super peer" << std::endl;
+                    break;
+                case '2':
+                    return;
+                    break;
+                default:
+                    log("unexpected request", "closing connection");
+                    close(super_peer_socket_fd);
+                    return;
+            }
+        }
+
+        // handle all requests sent to the indexing server
+        void handle_leaf_node_requests(int leaf_node_socket_fd) {
             int leaf_node_id;
             //initialize connection with peer leaf_node with getting leaf_node id
             if (recv(leaf_node_socket_fd, &leaf_node_id, sizeof(leaf_node_id), 0) < 0) {
@@ -145,6 +215,25 @@ class SuperPeer {
             files_index = tmp_files_index;
         }
 
+        void send_search_query(std::string filename) {
+            int super_peer_socket_fd = connect_server(55001);
+            if (super_peer_socket_fd < 0) {
+                log("failed super peer connection", "ignoring connection");
+                return;
+            }
+
+            int id = 0;
+            if (send(super_peer_socket_fd, &id, sizeof(id), 0) < 0) {
+                log("failed super peer connection", "ignoring connection");
+                return;
+            }
+
+            if (send(super_peer_socket_fd, "1", sizeof(char), 0) < 0) {
+                log("failed super peer connection", "ignoring connection 2");
+                return;
+            }
+        }
+        
         // handles communication with peer leaf_node for returning all leaf_node ids mapped to a filename
         void search(int leaf_node_socket_fd, int leaf_node_id) {
             char buffer[MAX_FILENAME_SIZE];
@@ -174,6 +263,8 @@ class SuperPeer {
                 remove_leaf_node(leaf_node_socket_fd, leaf_node_id, "leaf_node unresponsive");
                 return;
             }
+
+            send_search_query(filename);
         }
 
         // helper function for displaying the entire files index
@@ -278,7 +369,7 @@ class SuperPeer {
                 log("conn established", conn_identity.str());
                 
                 // start thread for single client-server communication
-                std::thread t(&SuperPeer::handle_request, this, conn_socket_fd);
+                std::thread t(&SuperPeer::handle_connection, this, conn_socket_fd);
                 t.detach(); // detaches thread and allows for next connection to be made without waiting
 
                 conn_identity.str("");
