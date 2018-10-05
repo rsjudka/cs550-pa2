@@ -364,6 +364,7 @@ class SuperPeer {
             addr.sin_port = htons(peer_port);
 
             socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+            setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
 
             // bind socket to port to be used for indexing server
             if (bind(socket_fd, (struct sockaddr*)&addr, addr_size) < 0)
