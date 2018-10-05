@@ -81,7 +81,7 @@ class SuperPeer {
 
         // handle all requests sent to the indexing server
         void handle_connection(int conn_socket_fd) {
-            int id;
+            char id;
             //initialize connection with conn by getting conn id
             if (recv(conn_socket_fd, &id, sizeof(id), 0) < 0) {
                 log("conn unidentified", "closing connection");
@@ -90,10 +90,10 @@ class SuperPeer {
             }
 
             switch (id) {
-                case 0:
+                case '0':
                     handle_super_peer_request(conn_socket_fd);
                     break;
-                case 1:
+                case '1':
                     handle_leaf_node_requests(conn_socket_fd);
                     break;
                 default:
@@ -231,33 +231,32 @@ class SuperPeer {
         void send_search_query(std::string filename) {
             for (auto&& neighbor : neighbors) {
                 int super_peer_socket_fd = connect_server(neighbor);
-                if (super_peer_socket_fd < 0)
+                if (super_peer_socket_fd < 0) {
                     log("failed super peer connection", "ignoring connection");
+                    continue;
+                }
+                if (send(super_peer_socket_fd, "0", sizeof(char), 0) < 0)
+                    log("super peer unresponsive", "ignoring request");
                 else {
-                    int id = 0;
-                    if (send(super_peer_socket_fd, &id, sizeof(id), 0) < 0)
-                        log("failed super peer connection", "ignoring connection");
+                    if (send(super_peer_socket_fd, "1", sizeof(char), 0) < 0) 
+                        log("super peer unresponsive", "ignoring request");
                     else {
-                        if (send(super_peer_socket_fd, "1", sizeof(char), 0) < 0) 
-                            log("failed super peer connection", "ignoring connection");
+                        char buffer[MAX_FILENAME_SIZE];
+                        strcpy(buffer, filename.c_str());
+                        if (send(super_peer_socket_fd, buffer, sizeof(buffer), 0) < 0) {
+                            std::cout << "\nunexpected connection issue: no search performed\n" << std::endl;
+                            log("super peer unresponsive", "ignoring request");
+                        }
                         else {
-                            char buffer[MAX_FILENAME_SIZE];
-                            strcpy(buffer, filename.c_str());
-                            if (send(super_peer_socket_fd, buffer, sizeof(buffer), 0) < 0) {
+                            char buffer_[MAX_MSG_SIZE];
+                            if (recv(super_peer_socket_fd, buffer_, sizeof(buffer_), 0) < 0) {
                                 std::cout << "\nunexpected connection issue: no search performed\n" << std::endl;
                                 log("super peer unresponsive", "ignoring request");
                             }
-                            else {
-                                char buffer_[MAX_MSG_SIZE];
-                                if (recv(super_peer_socket_fd, buffer_, sizeof(buffer_), 0) < 0) {
-                                    std::cout << "\nunexpected connection issue: no search performed\n" << std::endl;
-                                    log("super peer unresponsive", "ignoring request");
-                                }
-                                else if (!buffer[0])
-                                    std::cout << "\nfile \"" << filename << "\" not found\n" << std::endl;
-                                else
-                                    std::cout << "\nnode(s) with file \"" << filename << "\": " << buffer_ << '\n' << std::endl;
-                            }
+                            else if (!buffer_[0])
+                                std::cout << "\nfile \"" << filename << "\" not found\n" << std::endl;
+                            else
+                            std::cout << "\nnode(s) with file \"" << filename << "\": " << buffer_ << '\n' << std::endl;
                         }
                     }
                 }
@@ -274,7 +273,6 @@ class SuperPeer {
             }
 
             std::string node_ids = get_ids_from_filename(buffer);
-            std::cout << "found nodes: " << node_ids  << ":" << std::endl;
 
             char buffer_[MAX_MSG_SIZE];
             strcpy(buffer_, node_ids.c_str());

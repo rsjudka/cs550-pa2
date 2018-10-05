@@ -404,10 +404,9 @@ class LeafNode {
         
         void run_client() {
             int server_socket_fd = connect_server(pexer_port);
-            int id = 1;
 
             //send type id to be used as client id in super peer
-            if (send(server_socket_fd, &id, sizeof(id), 0) < 0)
+            if (send(server_socket_fd, "1", sizeof(char), 0) < 0)
                 error("server unreachable");
 
             //send node server port number to be used as client id in super peer
