@@ -228,7 +228,7 @@ class SuperPeer {
             return ids.str();
         }
 
-        std::string send_search_query(std::string filename) {
+        std::string get_neighbor_ids_from_filename(std::string filename) {
             std::string filename_ids;
             std::string delimiter;
             for (auto&& neighbor : neighbors) {
@@ -251,9 +251,10 @@ class SuperPeer {
                             char buffer_[MAX_MSG_SIZE];
                             if (recv(super_peer_socket_fd, buffer_, sizeof(buffer_), 0) < 0)
                                 log("super peer unresponsive", "ignoring request");
-                            else
+                            else if (buffer_[0]) {
                                 filename_ids += delimiter + std::string(buffer_);
                                 delimiter = ',';
+                            }
                         }
                     }
                 }
@@ -291,7 +292,9 @@ class SuperPeer {
             }
 
             std::string leaf_node_ids = get_ids_from_filename(buffer);
-            leaf_node_ids += ((!leaf_node_ids.empty()) ? "," : "") + send_search_query(buffer);
+            std::string neighbor_leaf_node_ids = get_neighbor_ids_from_filename(buffer);
+            if (!neighbor_leaf_node_ids.empty())
+                leaf_node_ids += ((!leaf_node_ids.empty()) ? "," : "") + neighbor_leaf_node_ids;
             char buffer_[MAX_MSG_SIZE];
             strcpy(buffer_, leaf_node_ids.c_str());
             // send comma delimited list of all leaf_node ids for a specific file to the peer leaf_node
