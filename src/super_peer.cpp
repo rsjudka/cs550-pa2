@@ -228,7 +228,9 @@ class SuperPeer {
             return ids.str();
         }
 
-        void send_search_query(std::string filename) {
+        std::string send_search_query(std::string filename) {
+            std::string filename_ids;
+            std::string delimiter;
             for (auto&& neighbor : neighbors) {
                 int super_peer_socket_fd = connect_server(neighbor);
                 if (super_peer_socket_fd < 0) {
@@ -243,25 +245,21 @@ class SuperPeer {
                     else {
                         char buffer[MAX_FILENAME_SIZE];
                         strcpy(buffer, filename.c_str());
-                        if (send(super_peer_socket_fd, buffer, sizeof(buffer), 0) < 0) {
-                            std::cout << "\nunexpected connection issue: no search performed\n" << std::endl;
+                        if (send(super_peer_socket_fd, buffer, sizeof(buffer), 0) < 0)
                             log("super peer unresponsive", "ignoring request");
-                        }
                         else {
                             char buffer_[MAX_MSG_SIZE];
-                            if (recv(super_peer_socket_fd, buffer_, sizeof(buffer_), 0) < 0) {
-                                std::cout << "\nunexpected connection issue: no search performed\n" << std::endl;
+                            if (recv(super_peer_socket_fd, buffer_, sizeof(buffer_), 0) < 0)
                                 log("super peer unresponsive", "ignoring request");
-                            }
-                            else if (!buffer_[0])
-                                std::cout << "\nfile \"" << filename << "\" not found\n" << std::endl;
                             else
-                            std::cout << "\nnode(s) with file \"" << filename << "\": " << buffer_ << '\n' << std::endl;
+                                filename_ids += delimiter + std::string(buffer_);
+                                delimiter = ',';
                         }
                     }
                 }
                 close(super_peer_socket_fd);
             }
+            return filename_ids;
         }
 
         void peer_search(int super_peer_socket_fd) {
@@ -293,7 +291,7 @@ class SuperPeer {
             }
 
             std::string leaf_node_ids = get_ids_from_filename(buffer);
-
+            leaf_node_ids += ((!leaf_node_ids.empty()) ? "," : "") + send_search_query(buffer);
             char buffer_[MAX_MSG_SIZE];
             strcpy(buffer_, leaf_node_ids.c_str());
             // send comma delimited list of all leaf_node ids for a specific file to the peer leaf_node
@@ -301,8 +299,6 @@ class SuperPeer {
                 remove_leaf_node(leaf_node_socket_fd, leaf_node_id, "leaf_node unresponsive");
                 return;
             }
-
-            send_search_query(buffer);
         }
 
         // helper function for displaying the entire files index
@@ -364,7 +360,6 @@ class SuperPeer {
             addr.sin_port = htons(peer_port);
 
             socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-            setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, "1", sizeof(int));
 
             // bind socket to port to be used for indexing server
             if (bind(socket_fd, (struct sockaddr*)&addr, addr_size) < 0)
@@ -373,7 +368,7 @@ class SuperPeer {
             std::cout << "starting indexing server on port " << peer_port << '\n' << std::endl;
 
             // start logging
-            server_log.open("logs/indexing_server/server.log");
+            server_log.open("logs/super_peers/" + std::to_string(peer_port));
         }
 
         std::vector<int> comma_delim_ints_to_vector(std::string s) {

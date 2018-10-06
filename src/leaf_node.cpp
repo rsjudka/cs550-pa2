@@ -397,7 +397,7 @@ class LeafNode {
             std::cout << "current client id: " << node_port << '\n' << std::endl;
 
             // start logging for both node client and node server
-            std::string log_name_prefix = "logs/nodes/" + std::to_string(node_port);
+            std::string log_name_prefix = "logs/leaf_nodes/" + std::to_string(node_port);
             server_log.open(log_name_prefix + "_server.log");
             client_log.open(log_name_prefix + "_client.log");
         }
