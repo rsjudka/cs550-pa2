@@ -345,15 +345,15 @@ class LeafNode {
             int member_type;
             int id;
             int port;
-            int pexer;
+            int peer;
 
             std::string tmp;
             while(config >> member_type) {
                 if (member_type == 1) {
-                    config >> id >> port >> pexer;
+                    config >> id >> port >> peer;
                     if (id == node_id) {
                         node_port = port;
-                        pexer_port = pexer;
+                        peer_port = peer;
                         return;
                     }
                 }
@@ -367,7 +367,7 @@ class LeafNode {
         std::string files_directory_path;
         int node_id;
         int node_port;
-        int pexer_port;
+        int peer_port;
         int socket_fd;
 
         LeafNode(int id, std::string config_path, std::string directory_path) {
@@ -403,7 +403,7 @@ class LeafNode {
         }
         
         void run_client() {
-            int server_socket_fd = connect_server(pexer_port);
+            int server_socket_fd = connect_server(peer_port);
 
             //send type id to be used as client id in super peer
             if (send(server_socket_fd, "1", sizeof(char), 0) < 0)
