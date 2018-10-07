@@ -24,15 +24,23 @@ class SuperPeer {
     private:
         std::vector<int> neighbors;
         std::vector<int> leaf_nodes;
-        
+
         std::unordered_map<std::string, std::vector<int>> files_index; // mapping between a filename and any peers associated with it
         
-        std::vector<std::pair<int, int>> message_ids;
+        struct Message_ID_Hash {
+            size_t operator()(const std::pair<int, int>& p) const {
+                return p.first ^ p.second;
+            }
+        };
+        
+        typedef std::pair<int, int> Message_ID;
+        std::unordered_map<Message_ID, std::chrono::system_clock::time_point, Message_ID_Hash> message_ids;
         
         std::ofstream server_log;
 
         std::mutex log_m;
         std::mutex files_index_m;
+        std::mutex message_ids_m;
 
         // helper function for getting the current time to microsecond-accuracy as a string
         std::string time_now() {
@@ -232,7 +240,7 @@ class SuperPeer {
             return ids.str();
         }
 
-        std::string get_neighbor_ids_from_filename(std::string filename, int leaf_node_id, int ttl) {
+        std::string get_neighbor_ids_from_filename(std::string filename, int leaf_node_id, int seq_id_, int ttl) {
             std::string filename_ids;
             std::string delimiter;
             for (auto&& neighbor : neighbors) {
@@ -252,21 +260,27 @@ class SuperPeer {
                         else {
                             if (send(super_peer_socket_fd, &leaf_node_id, sizeof(leaf_node_id), 0) < 0)
                                 log("super peer unresponsive", "ignoring request");
-                            else {  
+                            else {
+                                if (send(super_peer_socket_fd, &seq_id_, sizeof(seq_id_), 0) < 0)
+                                    log("super peer unresponsive", "ignoring request");
+                                else {
                                 char buffer[MAX_FILENAME_SIZE];
                                 strcpy(buffer, filename.c_str());
                                 if (send(super_peer_socket_fd, buffer, sizeof(buffer), 0) < 0)
                                     log("super peer unresponsive", "ignoring request");
-                                else {
-                                    if (!send_message_id(super_peer_socket_fd, leaf_node_id, 0)) // zero val hard coded for now
-                                        log("super peer unresponsive", "ignoring request");
                                     else {
-                                        char buffer_[MAX_MSG_SIZE];
-                                        if (recv(super_peer_socket_fd, buffer_, sizeof(buffer_), 0) < 0)
+                                        if (!send_message_id(super_peer_socket_fd, leaf_node_id, seq_id_))
                                             log("super peer unresponsive", "ignoring request");
-                                        else if (buffer_[0]) {
-                                            filename_ids += delimiter + std::string(buffer_);
-                                            delimiter = ',';
+                                        else {
+                                            std::string msg = "msg id [" + std::to_string(leaf_node_id) + "," + std::to_string(seq_id_) + "] to peer " + std::to_string(neighbor);
+                                            log("forwarding message", msg);
+                                            char buffer_[MAX_MSG_SIZE];
+                                            if (recv(super_peer_socket_fd, buffer_, sizeof(buffer_), 0) < 0)
+                                                log("super peer unresponsive", "ignoring request");
+                                            else if (buffer_[0]) {
+                                                filename_ids += delimiter + std::string(buffer_);
+                                                delimiter = ',';
+                                            }
                                         }
                                     }
                                 }
@@ -286,7 +300,7 @@ class SuperPeer {
             if (send(super_peer_socket_fd, &sequence_number, sizeof(sequence_number), 0) < 0)
                 return false;
             
-            message_ids.push_back(std::make_pair(leaf_node_id, sequence_number));
+            message_ids[{leaf_node_id, sequence_number}] = std::chrono::system_clock::now();
             return true;
         }
 
@@ -304,12 +318,13 @@ class SuperPeer {
                 return false;
             }
 
-            std::pair<int, int> message_id = std::make_pair(leaf_node_id, sequence_number);
-            if (std::find(message_ids.begin(), message_ids.end(), message_id) == message_ids.end()) {
-                message_ids.push_back(message_id);
+            Message_ID msg_id = {leaf_node_id, sequence_number};
+            std::lock_guard<std::mutex> guard(message_ids_m);
+            if (message_ids.find(msg_id) == message_ids.end()) {
+                message_ids[msg_id] = std::chrono::system_clock::now();
                 return true;
             }
-            std::cout << "message already forwarded" << std::endl;
+            log("message already seen", "rerouting message back to sender");
             return false;
         }
 
@@ -324,6 +339,12 @@ class SuperPeer {
             if (recv(super_peer_socket_fd, &leaf_node_id, sizeof(leaf_node_id), 0) < 0) {
                 log("super peer unresponsive", "ignoring request");
                 return;
+            }
+
+            int seq_id_;
+            if (recv(super_peer_socket_fd, &seq_id_, sizeof(seq_id_), 0) < 0) {
+                log("super peer unresponsive", "ignoring request");
+                return;
             }            
 
             char buffer[MAX_FILENAME_SIZE];
@@ -334,12 +355,13 @@ class SuperPeer {
             }
 
             std::string node_ids;
-            if (check_message_id(super_peer_socket_fd))
+            if (check_message_id(super_peer_socket_fd)) {
                 node_ids = get_ids_from_filename(buffer);
-            else if (ttl-- > 0) {
-                std::string neighbor_leaf_node_ids = get_neighbor_ids_from_filename(buffer, leaf_node_id, ttl);
-                if (!neighbor_leaf_node_ids.empty())
-                    node_ids += ((!node_ids.empty()) ? "," : "") + neighbor_leaf_node_ids;
+                if (ttl-- > 0) {
+                    std::string neighbor_leaf_node_ids = get_neighbor_ids_from_filename(buffer, leaf_node_id, seq_id_, ttl);
+                    if (!neighbor_leaf_node_ids.empty())
+                        node_ids += ((!node_ids.empty()) ? "," : "") + neighbor_leaf_node_ids;
+                }
             }
 
             char buffer_[MAX_MSG_SIZE];
@@ -361,7 +383,9 @@ class SuperPeer {
             }
 
             std::string leaf_node_ids = get_ids_from_filename(buffer);
-            std::string neighbor_leaf_node_ids = get_neighbor_ids_from_filename(buffer, leaf_node_id, TTL);
+            seq_id += 1;
+            std::cout << seq_id << std::endl;
+            std::string neighbor_leaf_node_ids = get_neighbor_ids_from_filename(buffer, leaf_node_id, seq_id, TTL);
             if (!neighbor_leaf_node_ids.empty())
                 leaf_node_ids += ((!leaf_node_ids.empty()) ? "," : "") + neighbor_leaf_node_ids;
             char buffer_[MAX_MSG_SIZE];
@@ -414,10 +438,21 @@ class SuperPeer {
             error("invalid peer id");
         }
 
+        void maintain_message_ids() {
+            while (1) {
+                for (auto itr = message_ids.cbegin(); itr != message_ids.cend();) {
+                    std::cout << "msg id: " << itr->first.first << "," << itr->first.second << std::endl;
+                    itr = (std::chrono::duration_cast<std::chrono::minutes>(std::chrono::system_clock::now() - itr->second).count() > 1) ? message_ids.erase(itr++) : ++itr;
+                }
+                sleep(5);
+            }
+        }
+
     public:
         int peer_id;
         int peer_port;
         int socket_fd;
+        int seq_id = 0;
 
         SuperPeer(int id, std::string config_path) {
             peer_id = id;
@@ -459,6 +494,9 @@ class SuperPeer {
             struct sockaddr_in addr;
             socklen_t addr_size = sizeof(addr);
             int conn_socket_fd;
+
+            std::thread t(&SuperPeer::maintain_message_ids, this);
+            t.detach();
 
             std::ostringstream conn_identity;
             while (1) {
