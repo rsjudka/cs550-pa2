@@ -25,7 +25,7 @@
 
 //global counters used only for logging special messages used for later anlaysis
 int search_request_counter = 0;
-int retrieve_request_counter = 0;
+int obtain_request_counter = 0;
 
 
 class LeafNode {
@@ -268,11 +268,11 @@ class LeafNode {
         }
         
         // handle user interface for sending a retrieve request to a node server
-        void retrieve_request(int server_socket_fd) {
+        void obtain_request(int server_socket_fd) {
             std::cout << "node: ";
             char node[6];
             std::cin >> node;
-            eval_log(client_log, retrieve_request_counter, "retrieve request", "start");
+            eval_log(client_log, obtain_request_counter, "retrieve request", "start");
             // check if the passed-in node is the current client
             if (atoi(node) == node_port) {
                 std::cout << "\nnode '" << node << "' is current client: no retreival performed\n" << std::endl;
@@ -286,11 +286,11 @@ class LeafNode {
                 return;
             }
             
-            eval_log(client_log, retrieve_request_counter, "retrieve request", "pause");
+            eval_log(client_log, obtain_request_counter, "retrieve request", "pause");
             std::cout << "filename: ";
             char filename[MAX_FILENAME_SIZE];
             std::cin >> filename;
-            eval_log(client_log, retrieve_request_counter, "retrieve request", "unpause");
+            eval_log(client_log, obtain_request_counter, "retrieve request", "unpause");
             if (send(node_socket_fd, filename, sizeof(filename), 0) < 0) {
                 std::cout << "\nunexpected connection issue: no retreival performed\n" << std::endl;
                 log(client_log, "node unresponsive", "ignoring request");
@@ -336,7 +336,7 @@ class LeafNode {
                     }
                 }
             }
-            eval_log(client_log, retrieve_request_counter++, "retrieve request", "end");
+            eval_log(client_log, obtain_request_counter++, "retrieve request", "end");
             close(node_socket_fd);
         }
 
@@ -420,7 +420,7 @@ class LeafNode {
             //continously prompt user for request
             while (1) {
                 std::string request;
-                std::cout << "request [(s)earch|(r)etrieve|(q)uit]: ";
+                std::cout << "request [(s)earch|(o)btain|(q)uit]: ";
                 std::cin >> request;
 
                 switch (request[0]) {
@@ -428,9 +428,9 @@ class LeafNode {
                     case 'S':
                         search_request(server_socket_fd);
                         break;
-                    case 'r':
-                    case 'R':
-                        retrieve_request(server_socket_fd);
+                    case 'o':
+                    case 'O':
+                        obtain_request(server_socket_fd);
                         break;
                     case 'q':
                     case 'Q':
