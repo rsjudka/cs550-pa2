@@ -14,6 +14,7 @@
 #include <fstream>
 
 
+#define TTL 3
 #define HOST "localhost" // assume all connections happen on same machine
 #define MAX_FILENAME_SIZE 256 // assume the maximum file size is 256 characters
 #define MAX_MSG_SIZE 4096
@@ -25,6 +26,9 @@ class SuperPeer {
         std::vector<int> leaf_nodes;
         
         std::unordered_map<std::string, std::vector<int>> files_index; // mapping between a filename and any peers associated with it
+        
+        std::vector<std::pair<int, int>> message_queue;
+        
         std::ofstream server_log;
 
         std::mutex log_m;
@@ -114,7 +118,7 @@ class SuperPeer {
 
             switch (request) {
                 case '1':
-                    peer_search(super_peer_socket_fd);
+                    query(super_peer_socket_fd);
                     break;
                 case '2':
                     return;
@@ -228,7 +232,7 @@ class SuperPeer {
             return ids.str();
         }
 
-        std::string get_neighbor_ids_from_filename(std::string filename) {
+        std::string get_neighbor_ids_from_filename(std::string filename, int ttl) {
             std::string filename_ids;
             std::string delimiter;
             for (auto&& neighbor : neighbors) {
@@ -243,17 +247,21 @@ class SuperPeer {
                     if (send(super_peer_socket_fd, "1", sizeof(char), 0) < 0) 
                         log("super peer unresponsive", "ignoring request");
                     else {
-                        char buffer[MAX_FILENAME_SIZE];
-                        strcpy(buffer, filename.c_str());
-                        if (send(super_peer_socket_fd, buffer, sizeof(buffer), 0) < 0)
-                            log("super peer unresponsive", "ignoring request");
-                        else {
-                            char buffer_[MAX_MSG_SIZE];
-                            if (recv(super_peer_socket_fd, buffer_, sizeof(buffer_), 0) < 0)
+                        if (send(super_peer_socket_fd, &ttl, sizeof(int), 0) < 0)
+                           log("super peer unresponsive", "ignoring request");
+                        else { 
+                            char buffer[MAX_FILENAME_SIZE];
+                            strcpy(buffer, filename.c_str());
+                            if (send(super_peer_socket_fd, buffer, sizeof(buffer), 0) < 0)
                                 log("super peer unresponsive", "ignoring request");
-                            else if (buffer_[0]) {
-                                filename_ids += delimiter + std::string(buffer_);
-                                delimiter = ',';
+                            else {
+                                char buffer_[MAX_MSG_SIZE];
+                                if (recv(super_peer_socket_fd, buffer_, sizeof(buffer_), 0) < 0)
+                                    log("super peer unresponsive", "ignoring request");
+                                else if (buffer_[0]) {
+                                    filename_ids += delimiter + std::string(buffer_);
+                                    delimiter = ',';
+                                }
                             }
                         }
                     }
@@ -263,7 +271,17 @@ class SuperPeer {
             return filename_ids;
         }
 
-        void peer_search(int super_peer_socket_fd) {
+        void query(int super_peer_socket_fd) {
+            int ttl;
+            if (recv(super_peer_socket_fd, &ttl, sizeof(ttl), 0) < 0) {
+                log("super peer unresponsive", "ignoring request");
+                return;
+            }
+            if (ttl-- < 1) {
+                std::cout << "done passing msg" << std::endl;
+                return;
+            }
+
             char buffer[MAX_FILENAME_SIZE];
             // recieve filename from peer leaf_node
             if (recv(super_peer_socket_fd, buffer, sizeof(buffer), 0) < 0) {
@@ -272,6 +290,9 @@ class SuperPeer {
             }
 
             std::string node_ids = get_ids_from_filename(buffer);
+            std::string neighbor_leaf_node_ids = get_neighbor_ids_from_filename(buffer, ttl);
+            if (!neighbor_leaf_node_ids.empty())
+                node_ids += ((!node_ids.empty()) ? "," : "") + neighbor_leaf_node_ids;
 
             char buffer_[MAX_MSG_SIZE];
             strcpy(buffer_, node_ids.c_str());
@@ -292,7 +313,7 @@ class SuperPeer {
             }
 
             std::string leaf_node_ids = get_ids_from_filename(buffer);
-            std::string neighbor_leaf_node_ids = get_neighbor_ids_from_filename(buffer);
+            std::string neighbor_leaf_node_ids = get_neighbor_ids_from_filename(buffer, TTL);
             if (!neighbor_leaf_node_ids.empty())
                 leaf_node_ids += ((!leaf_node_ids.empty()) ? "," : "") + neighbor_leaf_node_ids;
             char buffer_[MAX_MSG_SIZE];
