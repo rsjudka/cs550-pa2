@@ -263,10 +263,10 @@ class SuperPeer {
                                 if (send(super_peer_socket_fd, &seq_id_, sizeof(seq_id_), 0) < 0)
                                     log("super peer unresponsive", "ignoring request");
                                 else {
-                                char buffer[MAX_FILENAME_SIZE];
-                                strcpy(buffer, filename.c_str());
-                                if (send(super_peer_socket_fd, buffer, sizeof(buffer), 0) < 0)
-                                    log("super peer unresponsive", "ignoring request");
+                                    char buffer[MAX_FILENAME_SIZE];
+                                    strcpy(buffer, filename.c_str());
+                                    if (send(super_peer_socket_fd, buffer, sizeof(buffer), 0) < 0)
+                                        log("super peer unresponsive", "ignoring request");
                                     else {
                                         if (!send_message_id(super_peer_socket_fd, leaf_node_id, seq_id_))
                                             log("super peer unresponsive", "ignoring request");
