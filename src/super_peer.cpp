@@ -14,7 +14,6 @@
 #include <fstream>
 
 
-#define TTL 3
 #define HOST "localhost" // assume all connections happen on same machine
 #define MAX_FILENAME_SIZE 256 // assume the maximum file size is 256 characters
 #define MAX_MSG_SIZE 4096
@@ -128,9 +127,6 @@ class SuperPeer {
                 case '1':
                     query(super_peer_socket_fd);
                     break;
-                case '2':
-                    return;
-                    break;
                 default:
                     log("unexpected request", "closing connection");
             }
@@ -168,6 +164,9 @@ class SuperPeer {
                         break;
                     case '4':
                         print_files_map();
+                        break;
+                    case '5':
+                        print_message_ids_list();
                         break;
                     case '0':
                         remove_leaf_node(leaf_node_socket_fd, leaf_node_id, "leaf_node disconnected");
@@ -300,6 +299,7 @@ class SuperPeer {
             if (send(super_peer_socket_fd, &sequence_number, sizeof(sequence_number), 0) < 0)
                 return false;
             
+            std::lock_guard<std::mutex> guard(message_ids_m);
             message_ids[{leaf_node_id, sequence_number}] = std::chrono::system_clock::now();
             return true;
         }
@@ -382,9 +382,8 @@ class SuperPeer {
                 return;
             }
 
-            std::string leaf_node_ids = get_ids_from_filename(buffer);
             seq_id += 1;
-            std::cout << seq_id << std::endl;
+            std::string leaf_node_ids = get_ids_from_filename(buffer);
             std::string neighbor_leaf_node_ids = get_neighbor_ids_from_filename(buffer, leaf_node_id, seq_id, TTL);
             if (!neighbor_leaf_node_ids.empty())
                 leaf_node_ids += ((!leaf_node_ids.empty()) ? "," : "") + neighbor_leaf_node_ids;
@@ -413,6 +412,15 @@ class SuperPeer {
             std::cout << "_______________________________\n" << std::endl;
         }
 
+        void print_message_ids_list() {
+            std::lock_guard<std::mutex> guard(files_index_m);
+            std::cout << "\n__________MESSAGE IDS__________" << std::endl;
+            for (auto const &message_id : message_ids) {
+                std::cout << '[' << message_id.first.first << ',' << message_id.first.second << "]" << std::endl;
+            }
+            std::cout << "_______________________________\n" << std::endl;
+        }
+
         void get_network(std::string config_path) {
             std::ifstream config(config_path);
             int member_type;
@@ -421,6 +429,7 @@ class SuperPeer {
             std::string neighbors_string;
             std::string leaf_nodes_string;
 
+            config >> TTL;
             std::string tmp;
             while(config >> member_type) {
                 if (member_type == 0) {
@@ -440,15 +449,17 @@ class SuperPeer {
 
         void maintain_message_ids() {
             while (1) {
+                message_ids_m.lock();
                 for (auto itr = message_ids.cbegin(); itr != message_ids.cend();) {
-                    std::cout << "msg id: " << itr->first.first << "," << itr->first.second << std::endl;
                     itr = (std::chrono::duration_cast<std::chrono::minutes>(std::chrono::system_clock::now() - itr->second).count() > 1) ? message_ids.erase(itr++) : ++itr;
                 }
-                sleep(5);
+                message_ids_m.unlock();
+                sleep(60);
             }
         }
 
     public:
+        int TTL;
         int peer_id;
         int peer_port;
         int socket_fd;

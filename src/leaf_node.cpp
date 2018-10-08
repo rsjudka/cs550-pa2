@@ -342,11 +342,13 @@ class LeafNode {
 
         void get_network(std::string config_path) {
             std::ifstream config(config_path);
+            int ttl;
             int member_type;
             int id;
             int port;
             int peer;
 
+            config >> ttl;
             std::string tmp;
             while(config >> member_type) {
                 if (member_type == 1) {
@@ -441,6 +443,11 @@ class LeafNode {
                     case 'L':
                         // used for testing to see all registered files
                         send(server_socket_fd, "4", sizeof(char), 0);
+                        break;
+                    case 'm':
+                    case 'M':
+                        // used for testing to see current message ids list
+                        send(server_socket_fd, "5", sizeof(char), 0);
                         break;
                     default:
                         std::cout << "\nunexpected request\n" << std::endl;
