@@ -449,12 +449,11 @@ class SuperPeer {
 
         void maintain_message_ids() {
             while (1) {
-                message_ids_m.lock();
+                sleep(60);
+                std::lock_guard<std::mutex> guard(message_ids_m);
                 for (auto itr = message_ids.cbegin(); itr != message_ids.cend();) {
                     itr = (std::chrono::duration_cast<std::chrono::minutes>(std::chrono::system_clock::now() - itr->second).count() > 1) ? message_ids.erase(itr++) : ++itr;
                 }
-                message_ids_m.unlock();
-                sleep(60);
             }
         }
 
