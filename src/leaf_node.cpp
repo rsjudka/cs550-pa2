@@ -156,8 +156,8 @@ class LeafNode {
         }
 
         // create a connection to some server given a specific port
-        // super_peer flag used for knowing which type of server to connect
-        int connect_server(int port, bool super_peer=true) {
+        // peer flag used for knowing which type of server to connect
+        int connect_server(int port, bool peer=true) {
             struct sockaddr_in addr;
             socklen_t addr_size = sizeof(addr);
             bzero((char *)&addr, addr_size);
@@ -172,9 +172,9 @@ class LeafNode {
             
             // connect to the server
             if (connect(socket_fd, (struct sockaddr *)&addr, addr_size) < 0) {
-                // only exit program if failed to connect to super peer
-                if (super_peer)
-                    error("failed super peer connection");
+                // only exit program if failed to connect to peer
+                if (peer)
+                    error("failed peer connection");
                 else {
                     return -1;
                 }
@@ -202,7 +202,7 @@ class LeafNode {
                     else {
                         bzero(buffer, MAX_FILENAME_SIZE);
                         strcpy(buffer, x.first.c_str());
-                        // register file with the super peer
+                        // register file with the peer
                         if (send(socket_fd, buffer, sizeof(buffer), 0) < 0)
                             log(_client_log, "server unresponsive", "ignoring request");
                     }
@@ -214,25 +214,25 @@ class LeafNode {
             }
         }
         
-        // handle user interface for sending a search request to the super peer
+        // handle user interface for sending a search request to the peer
         void search_request(int socket_fd) {
             std::cout << "filename: ";
             char filename[MAX_FILENAME_SIZE];
             std::cin >> filename;
             eval_log(_client_log, SRCH_REQ_COUNTER, "search request", "start");
-            // send a search request to the super peer
+            // send a search request to the peer
             if (send(socket_fd, "3", sizeof(char), 0) < 0) {
                 std::cout << "\nunexpected connection issue: no search performed\n" << std::endl;
                 log(_client_log, "server unresponsive", "ignoring request");
             }
             else {
-                // send the filename to search to the super peer
+                // send the filename to search to the peer
                 if (send(socket_fd, filename, sizeof(filename), 0) < 0) {
                     std::cout << "\nunexpected connection issue: no search performed\n" << std::endl;
                     log(_client_log, "server unresponsive", "ignoring request");
                 }
                 else {
-                    // recieve list of nodes with file from super peer
+                    // recieve list of nodes with file from peer
                     // output appropriate message to node client
                     char buffer[MAX_MSG_SIZE];
                     if (recv(socket_fd, buffer, sizeof(buffer), 0) < 0) {
@@ -336,7 +336,7 @@ class LeafNode {
             close(socket_fd);
         }
 
-        // gets the static network info for a leaf node
+        // gets the static network info for a node
         void get_network(std::string config_path) {
             // open a stream to the config file
             std::ifstream config(config_path);
@@ -393,9 +393,9 @@ class LeafNode {
 
             // bind socket to port to be used for node server
             if (bind(_socket_fd, (struct sockaddr*)&addr, addr_size) < 0)
-                error("failed to start leaf node server");
+                error("failed to start node server");
 
-            std::cout << "current leaf node id: " << _port << '\n' << std::endl;
+            std::cout << "current node id: " << _port << '\n' << std::endl;
 
             // start logging for both node client and node server
             std::string log_name_prefix = "logs/leaf_nodes/" + std::to_string(_port);
@@ -406,11 +406,11 @@ class LeafNode {
         void run_client() {
             int socket_fd = connect_server(_peer_id);
 
-            //send type id to be used as client id in super peer
+            //send type id to be used as client id in peer
             if (send(socket_fd, "1", sizeof(char), 0) < 0)
                 error("server unreachable");
 
-            //send node server port number to be used as client id in super peer
+            //send node server port number to be used as client id in peer
             if (send(socket_fd, &_port, sizeof(_port), 0) < 0)
                 error("server unreachable");
 
