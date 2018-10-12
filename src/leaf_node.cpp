@@ -63,13 +63,6 @@ class LeafNode {
         // handles a node server's file retrieval request
         // only performs single retrieval
         void handle_client_request(int socket_fd) {
-            retrieve(socket_fd);
-
-            close(socket_fd);
-            log(_server_log, "client disconnected", "closed connection");
-        }
-
-        void retrieve(int socket_fd) {
             // recieve filename to download from node client
             char buffer[MAX_FILENAME_SIZE];
             if (recv(socket_fd, buffer, MAX_FILENAME_SIZE, 0) < 0) {
@@ -114,6 +107,8 @@ class LeafNode {
                 }
             }
             close(fd);
+            close(socket_fd);
+            log(_server_log, "client disconnected", "closed connection");
         }
 
         // read all files in node's directory and save to files vector
@@ -260,7 +255,8 @@ class LeafNode {
             size_t extension_idx = filename.find_last_of('.');
             local_filename << filename.substr(0, extension_idx);
             // add the file origin if the file already exists in the local directory
-            if ((std::find_if(_files.begin(), _files.end(), [filename](const std::pair<std::string, int> &element){return element.first == filename;}) != _files.end()))
+            if ((std::find_if(_files.begin(), _files.end(), [filename](const std::pair<std::string, int>
+                                                        &element){ return element.first == filename; }) != _files.end()))
                 local_filename << "-origin-" << node;
             local_filename << filename.substr(extension_idx, filename.size() - extension_idx);
 
@@ -464,7 +460,7 @@ class LeafNode {
             socklen_t addr_size = sizeof(addr);
             int socket_fd;
 
-            std::ostringstream client_identity;
+            std::ostringstream connection;
             while (1) {
                 // listen for any node connections to start file download
                 listen(_socket_fd, 5);
@@ -475,15 +471,15 @@ class LeafNode {
                     continue;
                 }
 
-                client_identity << inet_ntoa(addr.sin_addr) << '@' << ntohs(addr.sin_port);
-                log(_server_log, "client connected", client_identity.str());
+                connection << inet_ntoa(addr.sin_addr) << '@' << ntohs(addr.sin_port);
+                log(_server_log, "client connected", connection.str());
 
                 // start thread for performing file download
                 std::thread t(&LeafNode::handle_client_request, this, socket_fd);
                 t.detach(); // detaches thread and allows for next connection to be made without waiting
 
-                client_identity.str("");
-                client_identity.clear();
+                connection.str("");
+                connection.clear();
             }
         }
 
@@ -507,7 +503,7 @@ class LeafNode {
 int main(int argc, char *argv[]) {
     // require node id, config path, & files path to be passed as arg
     if (argc < 4) {
-        std::cerr << "usage: " << argv[0] << " node_id config_path files_path" << std::endl;
+        std::cerr << "usage: " << argv[0] << " id config_path files_path" << std::endl;
         exit(0);
     }
 
