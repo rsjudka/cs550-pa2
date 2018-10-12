@@ -497,6 +497,7 @@ class SuperPeer {
                 std::getline(ss, substr, ',');
                 result.push_back(atoi(substr.c_str()));
             }
+            std::random_shuffle(result.begin(), result.end());
             return result;
         }
 
