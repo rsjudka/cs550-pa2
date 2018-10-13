@@ -20,13 +20,14 @@ for peer in peers:
     p.start()
 
 
-time.sleep(10)
+time.sleep(5)
 
 
 def run_node(id_, config_dir, files_dir, does_queries):
     cmd = ['./leaf_node', id_, config_dir, files_dir]
     node = Popen(cmd, stdin=PIPE, stdout=open(os.devnull, 'w'))
 
+    time.sleep(5)
     if does_queries:
         for _ in range(200):
             node.stdin.write('s\n')
@@ -45,3 +46,5 @@ time.sleep(120)
 
 os.system('killall leaf_node')
 os.system('killall super_peer')
+
+os.system('mv logs/leaf_nodes/* ../evaluation/{}/{}/'.format(sys.argv[2], sys.argv[1]))
