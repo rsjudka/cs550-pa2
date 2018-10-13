@@ -1,0 +1,4 @@
+current node id: 55014
+
+request [(s)earch|(o)btain|(q)uit]: l
+request [(s)earch|(o)btain|(q)uit]: q

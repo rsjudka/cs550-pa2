@@ -1,0 +1,38 @@
+[1539461886785768] [conn established] 127.0.0.1@52130
+
+[1539462118566394] [conn established] 127.0.0.1@52202
+
+[1539462118566902] [peer disconnected] closed connection
+
+[1539462118568233] [conn established] 127.0.0.1@52206
+
+[1539462118568546] [message already seen] rerouting message back to sender
+
+[1539462118568774] [peer disconnected] closed connection
+
+[1539462118569921] [conn established] 127.0.0.1@52210
+
+[1539462118570222] [message already seen] rerouting message back to sender
+
+[1539462118570445] [peer disconnected] closed connection
+
+[1539462393068152] [forwarding message] msg id [55013,1] to peer 55000
+
+[1539462393071760] [conn established] 127.0.0.1@52304
+
+[1539462393072213] [message already seen] rerouting message back to sender
+
+[1539462393072449] [peer disconnected] closed connection
+
+[1539462393073684] [conn established] 127.0.0.1@52308
+
+[1539462393074065] [message already seen] rerouting message back to sender
+
+[1539462393074559] [peer disconnected] closed connection
+
+[1539462393075019] [forwarding message] msg id [55013,1] to peer 55003
+
+[1539462393075770] [forwarding message] msg id [55013,1] to peer 55001
+
+[1539462568993617] [node disconnected] closing connection for id '55013' and cleaning up index
+

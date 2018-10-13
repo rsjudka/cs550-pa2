@@ -1,0 +1,64 @@
+starting indexing server on port 55002
+
+[1539461886786179] [conn established] [127.0.0.1@52130]
+
+[1539462118566537] [conn established] [127.0.0.1@52202]
+
+[1539462118567075] [peer disconnected] [closed connection]
+
+[1539462118568416] [conn established] [127.0.0.1@52206]
+
+[1539462118568658] [message already seen] [rerouting message back to sender]
+
+[1539462118568924] [peer disconnected] [closed connection]
+
+[1539462118570094] [conn established] [127.0.0.1@52210]
+
+[1539462118570330] [message already seen] [rerouting message back to sender]
+
+[1539462118570581] [peer disconnected] [closed connection]
+
+
+__________FILES INDEX__________
+j.txt:55013
+i1.txt:55013
+h1.txt:55013
+b1.txt:55013
+d1.txt:55013
+c1.txt:55013
+f1.txt:55013
+g1.txt:55013
+a1.txt:55013
+e1.txt:55013
+_______________________________
+
+[1539462393068416] [forwarding message] [msg id [55013,1] to peer 55000]
+
+[1539462393072016] [conn established] [127.0.0.1@52304]
+
+[1539462393072336] [message already seen] [rerouting message back to sender]
+
+[1539462393072575] [peer disconnected] [closed connection]
+
+[1539462393073833] [conn established] [127.0.0.1@52308]
+
+[1539462393074395] [message already seen] [rerouting message back to sender]
+
+[1539462393074797] [peer disconnected] [closed connection]
+
+[1539462393075178] [forwarding message] [msg id [55013,1] to peer 55003]
+
+[1539462393075928] [forwarding message] [msg id [55013,1] to peer 55001]
+
+
+__________MESSAGE IDS__________
+[55013,1]
+_______________________________
+
+
+__________MESSAGE IDS__________
+_______________________________
+
+[1539462568993971] [node disconnected] [closing connection for id '55013' and cleaning up index]
+
+

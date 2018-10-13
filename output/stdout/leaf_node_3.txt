@@ -1,0 +1,11 @@
+current node id: 55013
+
+request [(s)earch|(o)btain|(q)uit]: l
+request [(s)earch|(o)btain|(q)uit]: s
+filename: b.txt
+
+file "b.txt" not found
+
+request [(s)earch|(o)btain|(q)uit]: m
+request [(s)earch|(o)btain|(q)uit]: m
+request [(s)earch|(o)btain|(q)uit]: q

@@ -1,0 +1,21 @@
+current node id: 55010
+
+request [(s)earch|(o)btain|(q)uit]: s
+filename: j.txt
+
+node(s) with file "j.txt": 55010,55011,55012,55014,55015,55013
+
+request [(s)earch|(o)btain|(q)uit]: l
+request [(s)earch|(o)btain|(q)uit]: o
+node: 55013
+filename: j.txt
+
+file "j.txt" downloaded as "j-origin-55013.txt"
+
+
+dislpay file 'j-origin-55013.txt'
+. . .
+
+request [(s)earch|(o)btain|(q)uit]: l
+request [(s)earch|(o)btain|(q)uit]: l
+request [(s)earch|(o)btain|(q)uit]: q
