@@ -497,7 +497,7 @@ class SuperPeer {
             std::cout << "starting indexing server on port " << _port << '\n' << std::endl;
 
             // start logging
-            _server_logs.open("logs/super_peers/" + std::to_string(_port));
+            _server_logs.open("logs/super_peers/" + std::to_string(_port) + ".log");
         }
 
         std::vector<int> comma_delim_ints_to_vector(std::string s) {
